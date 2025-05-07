@@ -47,6 +47,9 @@ public class Produit {
     @Column(columnDefinition = "BOOLEAN DEFAULT TRUE")
     private boolean actif = true;
 
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
+
     // Méthode de désactivation
 
     public void desactiver() {
