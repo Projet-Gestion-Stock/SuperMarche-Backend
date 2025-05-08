@@ -30,7 +30,7 @@ public class SupermarcheInfoController {
         this.cloudinaryService = cloudinaryService;
     }
 
-    @PostMapping("ajouterLogo")
+    @PostMapping("admin/ajouterLogo")
     public ResponseEntity<SupermarcheInfo> updateLogo(@RequestParam("file") MultipartFile file) {
         try {
             // 1. Supprimer l'ancien logo s'il existe
@@ -52,7 +52,7 @@ public class SupermarcheInfoController {
 
     }
 
-    @DeleteMapping("supprimerLogo")
+    @DeleteMapping("admin/supprimerLogo")
     public ResponseEntity<Void> deleteLogo() {
         try {
             SupermarcheInfo info = service.getInfo();
@@ -67,19 +67,20 @@ public class SupermarcheInfoController {
         }
     }
 
-    @GetMapping("recupererInfo")
+    @GetMapping("admin/recupererInfo")
     public SupermarcheInfo getInfo() {
         return service.getInfo();
     }
 
-    @PutMapping("modifierInfo")
+    @PutMapping("admin/modifierInfo")
     public SupermarcheInfo updateInfo(@RequestBody SupermarcheInfo info) {
         return service.updateInfo(info);
     }
 
+
     // Voir les horaires d'ouverture et de fermeture
 
-    @GetMapping("horaires")
+    @GetMapping("staff/horaires")
     public Map<String, String> getHoraires() {
         return service.getInfo().getHorairesOuverture().entrySet().stream()
                 .collect(Collectors.toMap(
@@ -88,12 +89,12 @@ public class SupermarcheInfoController {
                 ));
     }
 
-    @PostMapping("ajouterHoraires")
+    @PostMapping("admin/ajouterHoraires")
     public ResponseEntity<SupermarcheInfo> updateHoraires(@RequestBody HorairesUpdateDTO dto) {
         return ResponseEntity.ok(service.updateHoraires(dto));
     }
 
-    @GetMapping("horaires/statut")
+    @GetMapping("staff/horaires/statut")
     public Map<String, Object> getStatutOuverture() {
         boolean estOuvert = service.estPendantLesHeuresOuvertes();
         JourSemaine jour = JourSemaine.fromDayOfWeek(java.time.LocalDate.now().getDayOfWeek());

@@ -168,7 +168,7 @@ public class JwtService {
         // Claims personnalisés
         Map<String, Object> claims = Map.of(
                 "id", utilisateur.getId(),
-                "role", utilisateur.getRole().name()
+                "role", utilisateur.getRole().getAuthority() // Utilisez getAuthority() au lieu de name()
         );
 
         // Date actuelle

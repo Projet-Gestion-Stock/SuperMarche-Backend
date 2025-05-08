@@ -41,7 +41,7 @@ public class ProduitController {
     }
 
 
-    @PostMapping(path = "ajouterProduit", consumes = APPLICATION_JSON_VALUE)
+    @PostMapping(path = "gerant/ajouterProduit", consumes = APPLICATION_JSON_VALUE)
     public ResponseEntity<ProduitDTO> ajouterProduit(@RequestBody ProduitDTO produitDTO) {
         // Récupérer l'utilisateur connecté
         String emailUtilisateur = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -61,7 +61,7 @@ public class ProduitController {
 
     // Lister l'ensemble des produits
 
-    @GetMapping(path = "listerProduits", produces = APPLICATION_JSON_VALUE)
+    @GetMapping(path = "gerant/listerProduits", produces = APPLICATION_JSON_VALUE)
     public ResponseEntity<List<ProduitDTO>> listerProduitsActifs() {
         List<Produit> produits = produitService.listerProduitsActifs();
         List<ProduitDTO> dtos = produits.stream()
@@ -71,7 +71,7 @@ public class ProduitController {
     }
 
 
-   @GetMapping(path = "recupererProduit/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+   @GetMapping(path = "gerant/recupererProduit/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
    public ResponseEntity<ProduitDTO> recupererProduit(@PathVariable Long id) {
        Produit produit = produitService.recupererProduit(id);
        ProduitDTO produitDTO = ProduitMapper.toDto(produit, utilisateurMapper);
@@ -79,7 +79,7 @@ public class ProduitController {
    }
 
 
-    @PutMapping(path = "modifierProduit/{id}", consumes = APPLICATION_JSON_VALUE)
+    @PutMapping(path = "gerant/modifierProduit/{id}", consumes = APPLICATION_JSON_VALUE)
     public ResponseEntity<ProduitDTO> modifierProduit(
             @PathVariable Long id,
             @RequestBody ProduitDTO produitDTO) {
@@ -92,13 +92,13 @@ public class ProduitController {
 
     // desactiver un produit au lieu de le supprimer
 
-    @PostMapping("desactiverProduit/{id}")
+    @PostMapping("gerant/desactiverProduit/{id}")
     public ResponseEntity<Void> desactiverProduit(@PathVariable Long id) {
         produitService.desactiverProduit(id);
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping(path = "listerProduitsEnRupture", produces = MediaType.APPLICATION_JSON_VALUE)
+    @GetMapping(path = "gerant/listerProduitsEnRupture", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<List<ProduitDTO>> listerProduitsEnRupture() {
         List<Produit> produits = produitService.listerProduitsEnRupture();
         List<ProduitDTO> dtos = produits.stream()
@@ -108,7 +108,7 @@ public class ProduitController {
     }
 
     // Endpoint pour produits périmés
-    @GetMapping("avec-statut-expiration")
+    @GetMapping("gerant/avec-statut-expiration")
     public ResponseEntity<List<ProduitDTO>> getProduitsAvecStatutExpiration(
             @RequestParam(defaultValue = "21") int joursAlerte) {
 

@@ -25,7 +25,7 @@ public class ImageController {
         this.produitRepository = produitRepository;
     }
 
-    @PostMapping(value = "upload/{produitId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "gerant/upload/{produitId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ImageResponseDTO> uploadImage(
             @PathVariable Long produitId,
             @RequestParam("file") MultipartFile file) {
@@ -36,7 +36,7 @@ public class ImageController {
         );
     }
 
-    @DeleteMapping("/supprimer/{produitId}")
+    @DeleteMapping("gerant/supprimer/{produitId}")
     public ResponseEntity<ImageResponseDTO> deleteImage(@PathVariable Long produitId) {
         try {
             // 1. Vérifier si le produit existe
@@ -79,7 +79,7 @@ public class ImageController {
         }
     }
 
-    @GetMapping("info/{produitId}")
+    @GetMapping("gerant/info/{produitId}")
     public ResponseEntity<ImageResponseDTO> getImageUrl(@PathVariable Long produitId) {
         try {
             Produit produit = produitRepository.findById(produitId)

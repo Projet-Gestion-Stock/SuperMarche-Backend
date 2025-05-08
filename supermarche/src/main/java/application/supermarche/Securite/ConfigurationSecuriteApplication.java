@@ -35,8 +35,19 @@ public class ConfigurationSecuriteApplication {
                         .authorizeHttpRequests(
                                 authorize ->
                                         authorize
-                                                .anyRequest().permitAll()
-                                                //.requestMatchers("/connexion").permitAll()
+                                                .requestMatchers("/user/connexion").permitAll()
+                                                .requestMatchers("/user/refresh-token").permitAll()
+                                                .requestMatchers("/user/deconnexion").permitAll()
+                                                .requestMatchers("/user/gerant/**").hasAnyRole("GERANT", "ADMIN")
+                                                .requestMatchers("/images/gerant/**").hasAnyRole("GERANT", "ADMIN")
+                                                .requestMatchers("/produits/gerant/**").hasAnyRole("GERANT", "ADMIN")
+                                                .requestMatchers("/stock/gerant/**").hasAnyRole("GERANT", "ADMIN")
+                                                .requestMatchers("/statistiques/admin/**").hasRole("ADMIN")
+                                                .requestMatchers("/statistiques/gerant/**").hasAnyRole("GERANT", "ADMIN")
+                                                .requestMatchers("/ventes/staff/**").hasAnyRole("STAFF", "GERANT", "ADMIN")
+                                                .requestMatchers("/supermarche/staff/**").hasAnyRole("STAFF", "GERANT", "ADMIN")
+                                                .requestMatchers("/supermarche/admin/**").hasRole("ADMIN")
+
                         )
                         .sessionManagement(httpSecuritySessionManagementConfigurer ->
                                 httpSecuritySessionManagementConfigurer.sessionCreationPolicy(SessionCreationPolicy.STATELESS)

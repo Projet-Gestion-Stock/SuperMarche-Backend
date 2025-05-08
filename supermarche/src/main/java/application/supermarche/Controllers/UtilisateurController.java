@@ -87,7 +87,7 @@ public class UtilisateurController {
 
     // creer un utilisateur
 
-    @PostMapping(path = "inscription",consumes = APPLICATION_JSON_VALUE)
+    @PostMapping(path = "gerant/inscription",consumes = APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     public UtilisateurDTO createUtilisateur(@RequestBody Utilisateur utilisateur) {
         return utilisateurService.createUtilisateur(utilisateur);
@@ -95,7 +95,7 @@ public class UtilisateurController {
 
     // Activer un utilisateur
 
-    @PostMapping("{id}/activation")
+    @PostMapping("gerant/{id}/activation")
     public ResponseEntity<Void> changerActivation(
             @PathVariable Long id,
             @RequestParam boolean actif) {
@@ -113,15 +113,15 @@ public class UtilisateurController {
 
     // Liste des utilisateurs
 
-    @GetMapping(path = "liste",produces = APPLICATION_JSON_VALUE)
+    @GetMapping(path = "gerant/liste",produces = APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.OK)
     public List<UtilisateurDTO> getAllUtilisateurs() {
         return utilisateurService.getAllUtilisateurs();
     }
 
-    // Afficher un utilisateur
+    // Afficher un utilisateur ( A verifier pour le role)
 
-    @GetMapping(path = "information/{id}",produces = APPLICATION_JSON_VALUE)
+    @GetMapping(path = "gerant/information/{id}",produces = APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.OK)
     public UtilisateurDTO getUtilisateurById(@PathVariable Long id) {
         return utilisateurService.getUtilisateurById(id);
@@ -130,7 +130,7 @@ public class UtilisateurController {
 
     // mettre a jour un utilisateur
 
-    @PutMapping(path = "modifier/{id}", consumes = APPLICATION_JSON_VALUE)
+    @PutMapping(path = "gerant/modifier/{id}", consumes = APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.OK)
     public UtilisateurDTO updateUtilisateur(
             @PathVariable Long id,

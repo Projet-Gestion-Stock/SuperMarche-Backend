@@ -30,7 +30,7 @@ public class StockController {
 
     // Mettre a jour le stock d'un produit
 
-    @PutMapping("/mettreAJourStock/{produitId}")
+    @PutMapping("gerant/mettreAJourStock/{produitId}")
     public ResponseEntity<StockResponseDTO> mettreAJourStock(
             @PathVariable Long produitId,
             @RequestBody StockUpdateRequestDTO request) {
@@ -47,9 +47,9 @@ public class StockController {
         );
     }
 
-    // Afficher les produit qui ontun stock faible
+    // Afficher les produit qui ont un stock faible
 
-    @GetMapping(path = "/alerte",produces = MediaType.APPLICATION_JSON_VALUE)
+    @GetMapping(path = "gerant/alerte",produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<List<StockAlerteDTO>> getAlertesStock() {
         List<Stock> stocks = stockService.listerStocksFaibles();
         List<StockAlerteDTO> dtos = stocks.stream()
@@ -60,7 +60,7 @@ public class StockController {
 
     // Afficher les statistique
 
-    @GetMapping(path = "/statistiquesStock",produces = MediaType.APPLICATION_JSON_VALUE)
+    @GetMapping(path = "gerant/statistiquesStock",produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> statistiquesStock() {
         Map<String, Object> stats = stockService.statistiquesStock();
         return new ResponseEntity<>(stats, HttpStatus.OK);

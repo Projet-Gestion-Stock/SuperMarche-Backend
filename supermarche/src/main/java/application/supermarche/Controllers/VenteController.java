@@ -36,7 +36,7 @@ public class VenteController {
         this.venteMapper = venteMapper;
     }
 
-    @PostMapping(path = "enregistrerVente", consumes = APPLICATION_JSON_VALUE)
+    @PostMapping(path = "staff/enregistrerVente", consumes = APPLICATION_JSON_VALUE)
     public ResponseEntity<VenteResponseDTO> enregistrerVente(@RequestBody VenteRequestDTO venteRequest) {
         // Récupération de l'utilisateur connecté
         String emailUtilisateur = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -52,20 +52,20 @@ public class VenteController {
     }
 
 
-  @GetMapping(path = "listerVentes", produces = MediaType.APPLICATION_JSON_VALUE)
+  @GetMapping(path = "staff/listerVentes", produces = MediaType.APPLICATION_JSON_VALUE)
   public ResponseEntity<List<VenteResponseDTO>> listerVentes() {
       List<VenteResponseDTO> ventes = venteService.listerVentes();
       return ResponseEntity.ok(ventes);
   }
 
-    @GetMapping(path = "recupererVente/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @GetMapping(path = "staff/recupererVente/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<VenteResponseDTO> recupererVente(@PathVariable Long id) {
         // Récupérer les détails de la vente
         VenteResponseDTO venteResponse = venteService.recupererVente(id);
         return new ResponseEntity<>(venteResponse, HttpStatus.OK);
     }
 
-    @GetMapping(path = "genererRecu/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @GetMapping(path = "staff/genererRecu/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> genererRecu(@PathVariable Long id) {
         // Générer un reçu pour la vente
         String recu = venteService.genererRecu(id);
@@ -74,7 +74,7 @@ public class VenteController {
 
     // generation du pdf
 
-    @GetMapping(path = "genererRecuPDF/{id}", produces = MediaType.APPLICATION_PDF_VALUE)
+    @GetMapping(path = "staff/genererRecuPDF/{id}", produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<?> genererRecuPDF(@PathVariable Long id) throws IOException {
         byte[] pdf = venteService.genererRecuPDF(id);
 
