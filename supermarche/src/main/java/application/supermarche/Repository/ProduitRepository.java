@@ -30,4 +30,6 @@ public interface ProduitRepository extends JpaRepository<Produit, Long> {
     @Query("SELECT p FROM Produit p WHERE p.dateExpiration < :date AND p.actif = true")
     List<Produit> findByDateExpirationBeforeAndActifTrue(@Param("date") LocalDate date);
 
+    boolean existsByProduitAndFournisseur(String produit, String fournisseur);
+
 }

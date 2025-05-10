@@ -4,20 +4,24 @@ import application.supermarche.Entites.PackageJwt.Jwt;
 import application.supermarche.Entites.PackageJwt.RefreshToken;
 import application.supermarche.Entites.PackageUtilisateur.HistoriqueConnexion;
 import application.supermarche.Entites.PackageUtilisateur.Utilisateur;
+import application.supermarche.Exceptions.InvalidTokenException;
+import application.supermarche.Exceptions.JwtException;
+import application.supermarche.Exceptions.TokenExpiredException;
 import application.supermarche.Repository.HistoriqueConnexionRepository;
 import application.supermarche.Repository.JwtRepository;
 import application.supermarche.Repository.RefreshTokenRepository;
 import application.supermarche.Services.PackageUtilisateur.UtilisateurService;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.security.Key;
@@ -94,9 +98,13 @@ public class JwtService {
         historiqueConnexionRepository.save(historique);
     }
 
-    // Récupère le username (subject)
     public String extractUsername(String token) {
-        return getClaim(token, Claims::getSubject);
+        try {
+            return getClaim(token, Claims::getSubject);
+        } catch (Exception e) {
+            log.error("Erreur lors de l'extraction du username: {}", e.getMessage());
+            throw new InvalidTokenException("Token invalide");
+        }
     }
 
     // Récupère l’email (dans claims personnalisés)
@@ -122,11 +130,19 @@ public class JwtService {
 
     // Extraction de tous les claims
     private Claims getAllClaims(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(getKey())
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
+        try {
+            return Jwts.parserBuilder()
+                    .setSigningKey(getKey())
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+        } catch (ExpiredJwtException e) {
+            log.warn("Token expiré");
+            throw new TokenExpiredException("Token expiré");
+        } catch (Exception e) {
+            log.error("Token invalide: {}", e.getMessage());
+            throw new InvalidTokenException("Token invalide");
+        }
     }
 
     public Map<String, String> generate(String username) {
@@ -168,7 +184,7 @@ public class JwtService {
         // Claims personnalisés
         Map<String, Object> claims = Map.of(
                 "id", utilisateur.getId(),
-                "role", utilisateur.getRole().getAuthority() // Utilisez getAuthority() au lieu de name()
+                "role", utilisateur.getRole().name() // Utilisez name() au lieu de getAuthority()
         );
 
         // Date actuelle
@@ -192,9 +208,33 @@ public class JwtService {
         return Map.of(BEARER, jwt);
     }
 
+    @PostConstruct
+    public void validateKey() {
+        try {
+            byte[] keyBytes = Base64.getDecoder().decode(secretKey);
+            if (keyBytes.length != 32) {
+                log.error("Clé JWT de taille incorrecte: {} bytes", keyBytes.length);
+                throw new IllegalStateException("La clé JWT doit faire exactement 32 bytes (256 bits)");
+            }
+            log.info("Configuration JWT valide");
+        } catch (IllegalArgumentException e) {
+            log.error("Clé JWT Base64 invalide");
+            throw new JwtException("Configuration JWT invalide", e); // Maintenant cela fonctionnera
+        }
+    }
+
     private Key getKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
-        return Keys.hmacShaKeyFor(keyBytes);
+        try {
+            // Vérification que la clé est bien en base64
+            byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+            if (keyBytes.length < 32) {
+                throw new IllegalArgumentException("La clé doit faire au moins 256 bits (32 bytes)");
+            }
+            return Keys.hmacShaKeyFor(keyBytes);
+        } catch (IllegalArgumentException e) {
+            log.error("Erreur de configuration de la clé JWT: {}", e.getMessage());
+            throw new RuntimeException("Configuration JWT invalide", e);
+        }
     }
 
     public void deconnexion(String username) {
@@ -219,22 +259,26 @@ public class JwtService {
         String refresh = refreshTokenRequest.get(REFRESH);
 
         Jwt jwt = this.jwtRepository.findByRefreshToken(refresh)
-                .orElseThrow(() -> new RuntimeException("Refresh token introuvable"));
+                .orElseThrow(() -> {
+                    log.warn("Refresh token introuvable");
+                    return new InvalidTokenException("Refresh token invalide");
+                });
 
         RefreshToken refreshToken = jwt.getRefreshToken();
 
         if (refreshToken.isExpire() || refreshToken.getExpiration().before(new Date())) {
-            throw new RuntimeException("Refresh token expiré ou invalide");
+            log.warn("Tentative d'utilisation de refresh token expiré");
+            throw new TokenExpiredException("Refresh token expiré");
         }
 
-        //  Enregistre l'action refresh token
-        this.enregistrerHistorique(jwt.getUtilisateur().getEmail(), "REFRESH");
-
-        // désactivation des anciens tokens
-        this.desactiveToken(jwt.getUtilisateur());
-
-        // génération d'un nouveau JWT + refresh token
-        return this.generate(jwt.getUtilisateur().getEmail());
+        try {
+            this.enregistrerHistorique(jwt.getUtilisateur().getEmail(), "REFRESH");
+            this.desactiveToken(jwt.getUtilisateur());
+            return this.generate(jwt.getUtilisateur().getEmail());
+        } catch (Exception e) {
+            log.error("Erreur lors du refresh token: {}", e.getMessage());
+            throw new JwtException("Erreur lors du renouvellement du token");
+        }
     }
 
 }

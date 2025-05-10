@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class ActivationUtilisateur {
 
     @Id
@@ -31,4 +32,5 @@ public class ActivationUtilisateur {
 
     @Column(name = "date_modification", updatable = false)
     private LocalDateTime dateModification = LocalDateTime.now();
+
 }

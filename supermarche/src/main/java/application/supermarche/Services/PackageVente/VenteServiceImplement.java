@@ -11,7 +11,10 @@ import application.supermarche.Entites.PackageUtilisateur.Utilisateur;
 import application.supermarche.Entites.PackageVente.Vente;
 import application.supermarche.Entites.PackageVente.VenteProduit;
 import application.supermarche.Entites.SupermarcheInfo.SupermarcheInfo;
-import application.supermarche.Exceptions.RessourceNotFoundException;
+import application.supermarche.Enumeration.ErrorCode;
+import application.supermarche.Exceptions.BusinessException;
+import application.supermarche.Exceptions.ResourceNotFoundException;
+import application.supermarche.Exceptions.UtilisateurException.RessourceNotFoundException;
 import application.supermarche.Mapper.VenteMapper;
 import application.supermarche.Repository.ProduitRepository;
 import application.supermarche.Repository.StockRepository;
@@ -20,6 +23,7 @@ import application.supermarche.Repository.VenteRepository;
 import application.supermarche.Services.PackageStock.StockService;
 import application.supermarche.Services.SupermarcheInfo.SupermarcheInfoService;
 import jakarta.transaction.Transactional;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.pdmodel.font.*;
 import org.springframework.stereotype.Service;
 
@@ -44,6 +48,7 @@ import java.net.URL;
 import java.util.List;
 import java.util.*;
 
+@Slf4j
 @Service
 public class VenteServiceImplement implements VenteService {
 
@@ -75,9 +80,9 @@ public class VenteServiceImplement implements VenteService {
     public Vente enregistrerVente(VenteRequestDTO venteRequest, Utilisateur utilisateur) {
         // 1. Validation initiale
         if (venteRequest.produits() == null || venteRequest.produits().isEmpty()) {
-            throw new IllegalArgumentException("La vente doit contenir au moins un produit");
+            throw new BusinessException("La vente doit contenir au moins un produit", ErrorCode.EMPTY_SALE);
         }
-
+        log.info("Début enregistrement vente pour l'utilisateur {}", utilisateur.getId());
         // 2. Initialisation de la vente
         Vente vente = new Vente();
         vente.setUtilisateur(utilisateur);
@@ -97,14 +102,12 @@ public class VenteServiceImplement implements VenteService {
                     .orElseThrow(() -> new RessourceNotFoundException("Stock introuvable pour le produit ID : " + p.produitId()));
 
             if (stock.getQuantite() < p.quantite()) {
-                throw new IllegalArgumentException(
-                        String.format("Stock insuffisant pour %s. Disponible: %d, Demandé: %d",
-                                produit.getProduit(),
-                                stock.getQuantite(),
-                                p.quantite())
+                throw new BusinessException(
+                        String.format("Stock insuffisant pour %s", produit.getProduit()),
+                        ErrorCode.INSUFFICIENT_STOCK
                 );
             }
-
+            log.debug("Produit {} - Quantité demandée: {}", produit.getProduit(), p.quantite());
             double sousTotal = produit.getPrix() * p.quantite();
             montantTotal += sousTotal;
 
@@ -119,11 +122,9 @@ public class VenteServiceImplement implements VenteService {
 
         // 4. Validation du paiement
         if (venteRequest.montantDonne() < montantTotal) {
-            throw new IllegalArgumentException(
-                    String.format("Montant insuffisant. Total: %.2f, Donné: %.2f, Manquant: %.2f",
-                            montantTotal,
-                            venteRequest.montantDonne(),
-                            montantTotal - venteRequest.montantDonne())
+            throw new BusinessException(
+                    "Montant donné insuffisant",
+                    ErrorCode.INSUFFICIENT_PAYMENT
             );
         }
 
@@ -156,7 +157,7 @@ public class VenteServiceImplement implements VenteService {
             stockRepository.save(stock);
         });
        // return venteSauvegardee;
-
+        log.info("Vente enregistrée avec succès. ID: {}", venteSauvegardee.getId());
         return venteRepository.findById(venteSauvegardee.getId())
                 .orElseThrow(() -> new RessourceNotFoundException("Vente non trouvée après création"));
     }
@@ -414,8 +415,15 @@ public class VenteServiceImplement implements VenteService {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             document.save(baos);
             return baos.toByteArray();
+        } catch (ResourceNotFoundException e) {
+            log.error("Vente non trouvée pour génération PDF - ID: {}", id);
+            throw e;
+        } catch (IOException e) {
+            log.error("Erreur E/S lors de la génération PDF: {}", e.getMessage());
+            throw new BusinessException("Erreur de génération du PDF", ErrorCode.PDF_GENERATION_ERROR);
         } catch (Exception e) {
-            throw new IOException("Erreur de generation du PDF: " + e.getMessage(), e);
+            log.error("Erreur technique génération PDF: {}", e.getMessage());
+            throw new BusinessException("Erreur technique", ErrorCode.TECHNICAL_ERROR);
         }
     }
 

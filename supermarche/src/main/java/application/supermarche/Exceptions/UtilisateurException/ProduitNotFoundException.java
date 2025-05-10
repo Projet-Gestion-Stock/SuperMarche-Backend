@@ -1,4 +1,4 @@
-package application.supermarche.Exceptions;
+package application.supermarche.Exceptions.UtilisateurException;
 
 public class ProduitNotFoundException extends RuntimeException {
     public ProduitNotFoundException(Long produitId) {

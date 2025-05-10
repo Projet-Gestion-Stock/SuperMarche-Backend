@@ -1,9 +1,12 @@
 package application.supermarche.Services.PackageCloudinary;
 
 import application.supermarche.Entites.PackageProduit.Produit;
-import application.supermarche.Exceptions.ProduitNotFoundException;
+import application.supermarche.Enumeration.ErrorCode;
+import application.supermarche.Exceptions.BusinessException;
+import application.supermarche.Exceptions.ResourceNotFoundException;
 import application.supermarche.Repository.ProduitRepository;
 import com.cloudinary.Cloudinary;
+import com.cloudinary.Transformation;
 import com.cloudinary.utils.ObjectUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,9 +17,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-@Service
 @Slf4j
+@Service
 public class CloudinaryService {
+
+    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
+            "image/jpeg", "image/png", "image/webp");
+    private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
     private final Cloudinary cloudinary;
     private final ProduitRepository produitRepository;
@@ -26,111 +33,196 @@ public class CloudinaryService {
         this.produitRepository = produitRepository;
     }
 
-    // Liste blanche des formats acceptés
-    private final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
-            "image/jpeg", "image/png", "image/webp");
-
     public String uploadProduitImage(MultipartFile file, Long produitId) {
         try {
-            // Validation du fichier
-            if (file.isEmpty()) {
-                throw new IllegalArgumentException("Le fichier image est vide");
-            }
+            log.info("Tentative d'upload d'image pour produit ID: {}", produitId);
+            validateImageFile(file);
 
-            if (!file.getContentType().startsWith("image/")) {
-                throw new IllegalArgumentException("Seules les images sont autorisées");
-            }
-
-            if (!ALLOWED_CONTENT_TYPES.contains(file.getContentType())) {
-                throw new IllegalArgumentException("Format d'image non supporté");
-            }
-
-            // Récupération du produit
             Produit produit = produitRepository.findById(produitId)
-                    .orElseThrow(() -> new ProduitNotFoundException(produitId));
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Produit non trouvé avec ID: ",
+                            ErrorCode.PRODUCT_NOT_FOUND));
 
-            // Configuration de l'upload
-            Map<String, Object> options = new HashMap<>();
-            options.put("folder", "supermarche/produits");
-            options.put("public_id", "produit_" + produitId);
-            options.put("overwrite", true);
-            options.put("resource_type", "image");
-            options.put("quality", "auto:best");
-            options.put("width", "800");
-            options.put("height", "800");
-            options.put("crop", "limit");
-
-            // Upload vers Cloudinary
+            Map<String, Object> options = createUploadOptions(produitId);
             Map<?, ?> uploadResult = cloudinary.uploader().upload(file.getBytes(), options);
-            String imageUrl = (String) uploadResult.get("secure_url");
+            String imageUrl = getSecureUrl(uploadResult);
 
-            // Mise à jour du produit
-            produit.setImageUrl(imageUrl);
-            produitRepository.save(produit);
+            updateProduitImage(produit, imageUrl);
+            log.info("Image uploadée avec succès - Produit ID: {}, URL: {}", produitId, imageUrl);
 
-            log.info("Image uploadée avec succès pour le produit ID: {}", produitId);
             return imageUrl;
 
+        } catch (ResourceNotFoundException e) {
+            log.warn("Produit non trouvé pour l'upload: {}", produitId);
+            throw e;
+        } catch (BusinessException e) {
+            log.warn("Validation échouée pour l'upload: {}", e.getMessage());
+            throw e;
         } catch (IOException e) {
-            log.error("Erreur lors de l'upload de l'image", e);
-            throw new RuntimeException("Erreur lors de l'upload de l'image", e);
+            log.error("Erreur IO lors de l'upload: {}", e.getMessage());
+            throw new BusinessException(
+                    "Erreur lors de l'upload de l'image",
+                    ErrorCode.IMAGE_UPLOAD_ERROR);
+        } catch (Exception e) {
+            log.error("Erreur technique lors de l'upload: {}", e.getMessage());
+            throw new BusinessException(
+                    "Erreur technique lors de l'upload",
+                    ErrorCode.TECHNICAL_ERROR);
         }
     }
 
     public void deleteImage(Long produitId) {
         try {
+            log.info("Tentative de suppression d'image pour produit ID: {}", produitId);
             Produit produit = produitRepository.findById(produitId)
-                    .orElseThrow(() -> new ProduitNotFoundException(produitId));
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Produit non trouvé avec ID: ",
+                            ErrorCode.PRODUCT_NOT_FOUND));
 
             if (produit.getImageUrl() == null) {
+                log.debug("Aucune image à supprimer pour produit ID: {}", produitId);
                 return;
             }
 
-            // Extraction du public_id à partir de l'URL
             String publicId = extractPublicIdFromUrl(produit.getImageUrl());
-
-            // Suppression de l'image
             cloudinary.uploader().destroy(publicId, ObjectUtils.emptyMap());
 
-            // Mise à jour du produit
             produit.setImageUrl(null);
             produitRepository.save(produit);
+            log.info("Image supprimée avec succès - Produit ID: {}", produitId);
 
-            log.info("Image supprimée avec succès pour le produit ID: {}", produitId);
-
+        } catch (ResourceNotFoundException e) {
+            log.warn("Produit non trouvé pour suppression image: {}", produitId);
+            throw e;
         } catch (IOException e) {
-            log.error("Erreur lors de la suppression de l'image", e);
-            throw new RuntimeException("Erreur lors de la suppression de l'image", e);
+            log.error("Erreur IO lors de la suppression: {}", e.getMessage());
+            throw new BusinessException(
+                    "Erreur lors de la suppression de l'image",
+                    ErrorCode.IMAGE_DELETE_ERROR);
+        } catch (Exception e) {
+            log.error("Erreur technique lors de la suppression: {}", e.getMessage());
+            throw new BusinessException(
+                    "Erreur technique lors de la suppression",
+                    ErrorCode.TECHNICAL_ERROR);
         }
     }
 
+    public String uploadLogo(MultipartFile file) {
+        try {
+            log.info("Tentative d'upload de logo");
+            validateImageFile(file);
+
+            Map<String, Object> params = new HashMap<>();
+            params.put("folder", "supermarche/logos");
+            params.put("public_id", "logo_" + System.currentTimeMillis());
+            params.put("transformation", new Transformation()
+                    .width(500).height(500).crop("limit").quality("auto:best"));
+
+            Map<?, ?> uploadResult = cloudinary.uploader().upload(file.getBytes(), params);
+            String logoUrl = getSecureUrl(uploadResult);
+
+            log.info("Logo uploadé avec succès - URL: {}", logoUrl);
+            return logoUrl;
+
+        } catch (BusinessException e) {
+            log.warn("Validation échouée pour l'upload logo: {}", e.getMessage());
+            throw e;
+        } catch (IOException e) {
+            log.error("Erreur IO lors de l'upload logo: {}", e.getMessage());
+            throw new BusinessException(
+                    "Erreur lors de l'upload du logo",
+                    ErrorCode.LOGO_UPLOAD_ERROR);
+        } catch (Exception e) {
+            log.error("Erreur technique lors de l'upload logo: {}", e.getMessage());
+            throw new BusinessException(
+                    "Erreur technique lors de l'upload du logo",
+                    ErrorCode.TECHNICAL_ERROR);
+        }
+    }
+
+    public void deleteLogo(String logoUrl) {
+        try {
+            if (logoUrl == null) {
+                log.debug("Aucun logo à supprimer (URL null)");
+                return;
+            }
+
+            log.info("Tentative de suppression de logo: {}", logoUrl);
+            String publicId = extractPublicIdFromUrl(logoUrl);
+            cloudinary.uploader().destroy(publicId, ObjectUtils.emptyMap());
+            log.info("Logo supprimé avec succès");
+
+        } catch (IOException e) {
+            log.error("Erreur IO lors de la suppression logo: {}", e.getMessage());
+            throw new BusinessException(
+                    "Erreur lors de la suppression du logo",
+                    ErrorCode.LOGO_DELETE_ERROR);
+        } catch (Exception e) {
+            log.error("Erreur technique lors de la suppression logo: {}", e.getMessage());
+            throw new BusinessException(
+                    "Erreur technique lors de la suppression du logo",
+                    ErrorCode.TECHNICAL_ERROR);
+        }
+    }
+
+    // Méthodes privées utilitaires
+    private void validateImageFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException(
+                    "Le fichier image est vide",
+                    ErrorCode.EMPTY_FILE);
+        }
+
+        if (file.getSize() > MAX_FILE_SIZE) {
+            throw new BusinessException(
+                    String.format("Taille maximale dépassée (%dMB max)",
+                            MAX_FILE_SIZE / (1024 * 1024)),
+                    ErrorCode.FILE_TOO_LARGE);
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType)) {
+            throw new BusinessException(
+                    "Format d'image non supporté. Formats acceptés: " + ALLOWED_CONTENT_TYPES,
+                    ErrorCode.INVALID_FILE_TYPE);
+        }
+    }
+
+    private Map<String, Object> createUploadOptions(Long produitId) {
+        Map<String, Object> options = new HashMap<>();
+        options.put("folder", "supermarche/produits");
+        options.put("public_id", "produit_" + produitId);
+        options.put("overwrite", true);
+        options.put("resource_type", "image");
+        options.put("transformation", new Transformation()
+                .width(800).height(800).crop("limit").quality("auto:best"));
+        return options;
+    }
+
+    private String getSecureUrl(Map<?, ?> uploadResult) {
+        String url = (String) uploadResult.get("secure_url");
+        if (url == null) {
+            throw new BusinessException(
+                    "URL sécurisée non reçue de Cloudinary",
+                    ErrorCode.CLOUDINARY_ERROR);
+        }
+        return url;
+    }
+
     private String extractPublicIdFromUrl(String imageUrl) {
-        // Logique pour extraire le public_id de l'URL Cloudinary
-        // Exemple d'URL: https://res.cloudinary.com/demo/image/upload/v1586162289/sample.jpg
-        // Le public_id serait "sample"
         try {
             String[] parts = imageUrl.split("/");
             String fileName = parts[parts.length - 1];
             return fileName.split("\\.")[0];
         } catch (Exception e) {
-            throw new IllegalArgumentException("URL d'image Cloudinary invalide");
+            throw new BusinessException(
+                    "URL d'image Cloudinary invalide",
+                    ErrorCode.INVALID_IMAGE_URL);
         }
     }
 
-    public String uploadLogo(MultipartFile file) throws IOException {
-        Map<String, Object> params = new HashMap<>();
-        params.put("folder", "supermarche/logos"); // Dossier spécifique pour les logos
-        params.put("public_id", "logo_" + System.currentTimeMillis()); // Nom unique
-
-        Map<?, ?> uploadResult = cloudinary.uploader().upload(file.getBytes(), params);
-        return (String) uploadResult.get("secure_url");
+    private void updateProduitImage(Produit produit, String imageUrl) {
+        produit.setImageUrl(imageUrl);
+        produitRepository.save(produit);
     }
-
-    public void deleteLogo(String logoUrl) throws IOException {
-        if (logoUrl == null) return;
-
-        String publicId = extractPublicIdFromUrl(logoUrl);
-        cloudinary.uploader().destroy(publicId, ObjectUtils.emptyMap());
-    }
-
 }

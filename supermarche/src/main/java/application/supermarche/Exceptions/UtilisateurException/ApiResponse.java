@@ -1,4 +1,4 @@
-package application.supermarche.Exceptions;
+package application.supermarche.Exceptions.UtilisateurException;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

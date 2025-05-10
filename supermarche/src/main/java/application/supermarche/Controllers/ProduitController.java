@@ -3,14 +3,17 @@ package application.supermarche.Controllers;
 
 import application.supermarche.DTO.PackageProduit.ProduitDTO;
 import application.supermarche.Entites.PackageProduit.Produit;
-import application.supermarche.Entites.PackageStock.Stock;
-import application.supermarche.Exceptions.RessourceNotFoundException;
+import application.supermarche.Entites.PackageUtilisateur.Utilisateur;
+import application.supermarche.Exceptions.ApiException;
+import application.supermarche.Exceptions.BusinessException;
+import application.supermarche.Exceptions.ResourceNotFoundException;
 import application.supermarche.Mapper.ProduitMapper;
 import application.supermarche.Mapper.UtilisateurMapper;
-import application.supermarche.Repository.ProduitRepository;
 import application.supermarche.Services.PackageProduit.ProduitService;
 import application.supermarche.Services.PackageStock.StockService;
 import application.supermarche.Services.PackageUtilisateur.UtilisateurService;
+import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -21,99 +24,158 @@ import java.util.List;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
+@Slf4j
 @RestController
 @RequestMapping("produits")
 public class ProduitController {
 
-
-    private final ProduitRepository produitRepository;
+    private final ProduitService produitService;
     private final StockService stockService;
     private final UtilisateurService utilisateurService;
-    private final ProduitService produitService;
     private final UtilisateurMapper utilisateurMapper;
 
-    public ProduitController(ProduitRepository produitRepository, StockService stockService, UtilisateurService utilisateurService, ProduitService produitService, UtilisateurMapper utilisateurMapper) {
-        this.produitRepository = produitRepository;
+    public ProduitController(ProduitService produitService,
+                             StockService stockService,
+                             UtilisateurService utilisateurService,
+                             UtilisateurMapper utilisateurMapper) {
+        this.produitService = produitService;
         this.stockService = stockService;
         this.utilisateurService = utilisateurService;
-        this.produitService = produitService;
         this.utilisateurMapper = utilisateurMapper;
     }
 
-
     @PostMapping(path = "gerant/ajouterProduit", consumes = APPLICATION_JSON_VALUE)
-    public ResponseEntity<ProduitDTO> ajouterProduit(@RequestBody ProduitDTO produitDTO) {
-        // Récupérer l'utilisateur connecté
-        String emailUtilisateur = SecurityContextHolder.getContext().getAuthentication().getName();
-        var utilisateur = utilisateurService.findByEmail(emailUtilisateur);
+    public ResponseEntity<ProduitDTO> ajouterProduit(@Valid @RequestBody ProduitDTO produitDTO) {
+        try {
+            log.info("Tentative d'ajout d'un nouveau produit: {}", produitDTO.produit());
 
-        // Mapper DTO vers entité et sauvegarder
-        Produit produit = ProduitMapper.toEntity(produitDTO, utilisateur);
-        Produit savedProduit = produitService.ajouterProduit(produit);
+            String emailUtilisateur = SecurityContextHolder.getContext().getAuthentication().getName();
+            Utilisateur utilisateur = utilisateurService.findByEmail(emailUtilisateur);
 
-        // Initialiser le stock
-        stockService.initialiserStockPourProduit(savedProduit, produitDTO.quantiteDisponible(), produitDTO.seuilAlerte());
+            Produit produit = ProduitMapper.toEntity(produitDTO, utilisateur);
+            Produit savedProduit = produitService.ajouterProduit(produit);
 
-        // Convertir en DTO pour la réponse
-        ProduitDTO responseDto = ProduitMapper.toDto(savedProduit, utilisateurMapper);
-        return new ResponseEntity<>(responseDto, HttpStatus.CREATED);
+            stockService.initialiserStockPourProduit(
+                    savedProduit,
+                    produitDTO.quantiteDisponible(),
+                    produitDTO.seuilAlerte()
+            );
+
+            ProduitDTO responseDto = ProduitMapper.toDto(savedProduit, utilisateurMapper);
+            log.info("Produit ajouté avec succès - ID: {}", savedProduit.getId());
+
+            return new ResponseEntity<>(responseDto, HttpStatus.CREATED);
+
+        } catch (BusinessException e) {
+            log.warn("Erreur métier lors de l'ajout: {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("Erreur technique lors de l'ajout: {}", e.getMessage());
+            throw new ApiException("Erreur lors de l'ajout du produit", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
-    // Lister l'ensemble des produits
-
-    @GetMapping(path = "gerant/listerProduits", produces = APPLICATION_JSON_VALUE)
+    @GetMapping(path = "staff/listerProduits", produces = APPLICATION_JSON_VALUE)
     public ResponseEntity<List<ProduitDTO>> listerProduitsActifs() {
-        List<Produit> produits = produitService.listerProduitsActifs();
-        List<ProduitDTO> dtos = produits.stream()
-                .map(p -> ProduitMapper.toDto(p, utilisateurMapper)) // Utilisation avec lambda
-                .toList();
-        return ResponseEntity.ok(dtos);
+        try {
+            log.debug("Récupération de la liste des produits actifs");
+            List<Produit> produits = produitService.listerProduitsActifs();
+            List<ProduitDTO> dtos = produits.stream()
+                    .map(p -> ProduitMapper.toDto(p, utilisateurMapper))
+                    .toList();
+            return ResponseEntity.ok(dtos);
+
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération des produits: {}", e.getMessage());
+            throw new ApiException("Erreur lors de la récupération des produits", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
+    @GetMapping(path = "gerant/recupererProduit/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ProduitDTO> recupererProduit(@PathVariable Long id) {
+        try {
+            log.debug("Récupération du produit ID: {}", id);
+            Produit produit = produitService.recupererProduit(id);
+            ProduitDTO produitDTO = ProduitMapper.toDto(produit, utilisateurMapper);
+            return ResponseEntity.ok(produitDTO);
 
-   @GetMapping(path = "gerant/recupererProduit/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-   public ResponseEntity<ProduitDTO> recupererProduit(@PathVariable Long id) {
-       Produit produit = produitService.recupererProduit(id);
-       ProduitDTO produitDTO = ProduitMapper.toDto(produit, utilisateurMapper);
-       return ResponseEntity.ok(produitDTO);
-   }
-
+        } catch (ResourceNotFoundException e) {
+            log.warn("Produit non trouvé - ID: {}", id);
+            throw e;
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération du produit: {}", e.getMessage());
+            throw new ApiException("Erreur lors de la récupération du produit", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 
     @PutMapping(path = "gerant/modifierProduit/{id}", consumes = APPLICATION_JSON_VALUE)
     public ResponseEntity<ProduitDTO> modifierProduit(
             @PathVariable Long id,
-            @RequestBody ProduitDTO produitDTO) {
+            @Valid @RequestBody ProduitDTO produitDTO) {
+        try {
+            log.info("Modification du produit ID: {}", id);
+            Produit updatedProduit = produitService.modifierProduit(id, produitDTO);
+            ProduitDTO responseDto = ProduitMapper.toDto(updatedProduit, utilisateurMapper);
+            return ResponseEntity.ok(responseDto);
 
-        Produit updatedProduit = produitService.modifierProduit(id, produitDTO);
-        ProduitDTO responseDto = ProduitMapper.toDto(updatedProduit, utilisateurMapper);
-
-        return ResponseEntity.ok(responseDto);
+        } catch (ResourceNotFoundException e) {
+            log.warn("Produit non trouvé pour modification - ID: {}", id);
+            throw e;
+        } catch (BusinessException e) {
+            log.warn("Erreur métier lors de la modification: {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("Erreur technique lors de la modification: {}", e.getMessage());
+            throw new ApiException("Erreur lors de la modification du produit", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
-
-    // desactiver un produit au lieu de le supprimer
 
     @PostMapping("gerant/desactiverProduit/{id}")
     public ResponseEntity<Void> desactiverProduit(@PathVariable Long id) {
-        produitService.desactiverProduit(id);
-        return ResponseEntity.noContent().build();
+        try {
+            log.info("Désactivation du produit ID: {}", id);
+            produitService.desactiverProduit(id);
+            return ResponseEntity.noContent().build();
+
+        } catch (ResourceNotFoundException e) {
+            log.warn("Produit non trouvé pour désactivation - ID: {}", id);
+            throw e;
+        } catch (Exception e) {
+            log.error("Erreur lors de la désactivation: {}", e.getMessage());
+            throw new ApiException("Erreur lors de la désactivation du produit", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
     @GetMapping(path = "gerant/listerProduitsEnRupture", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<List<ProduitDTO>> listerProduitsEnRupture() {
-        List<Produit> produits = produitService.listerProduitsEnRupture();
-        List<ProduitDTO> dtos = produits.stream()
-                .map(p -> ProduitMapper.toDto(p, utilisateurMapper))
-                .toList();
-        return ResponseEntity.ok(dtos);
+        try {
+            log.debug("Récupération des produits en rupture de stock");
+            List<Produit> produits = produitService.listerProduitsEnRupture();
+            List<ProduitDTO> dtos = produits.stream()
+                    .map(p -> ProduitMapper.toDto(p, utilisateurMapper))
+                    .toList();
+            return ResponseEntity.ok(dtos);
+
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération des produits en rupture: {}", e.getMessage());
+            throw new ApiException("Erreur lors de la récupération des produits en rupture", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
-    // Endpoint pour produits périmés
     @GetMapping("gerant/avec-statut-expiration")
     public ResponseEntity<List<ProduitDTO>> getProduitsAvecStatutExpiration(
             @RequestParam(defaultValue = "21") int joursAlerte) {
+        try {
+            log.debug("Récupération des produits avec statut d'expiration - Seuil: {} jours", joursAlerte);
+            List<ProduitDTO> dtos = produitService.getProduitsAvecStatutExpiration(joursAlerte);
+            return ResponseEntity.ok(dtos);
 
-        List<ProduitDTO> dtos = produitService.getProduitsAvecStatutExpiration(joursAlerte);
-        return ResponseEntity.ok(dtos);
+        } catch (BusinessException e) {
+            log.warn("Paramètre invalide pour l'alerte d'expiration: {}", joursAlerte);
+            throw e;
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération des produits expirés: {}", e.getMessage());
+            throw new ApiException("Erreur lors de la récupération des produits expirés", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
-
 }

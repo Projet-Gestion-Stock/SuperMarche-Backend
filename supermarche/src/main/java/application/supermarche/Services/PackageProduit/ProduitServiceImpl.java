@@ -2,17 +2,20 @@ package application.supermarche.Services.PackageProduit;
 
 import application.supermarche.DTO.PackageProduit.ProduitDTO;
 import application.supermarche.Entites.PackageProduit.Produit;
+import application.supermarche.Enumeration.ErrorCode;
+import application.supermarche.Exceptions.BusinessException;
+import application.supermarche.Exceptions.ResourceNotFoundException;
 import application.supermarche.Mapper.ProduitMapper;
 import application.supermarche.Mapper.UtilisateurMapper;
 import application.supermarche.Repository.ProduitRepository;
 import application.supermarche.Repository.StockRepository;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -29,6 +32,17 @@ public class ProduitServiceImpl implements ProduitService {
     @Transactional
     public Produit ajouterProduit(Produit produit) {
         log.info("Ajout d'un nouveau produit : {}", produit.getProduit());
+
+        if (produitRepository.existsByProduitAndFournisseur(produit.getProduit(), produit.getFournisseur())) {
+            throw new BusinessException(
+                    "Un produit similaire existe déjà",
+                    ErrorCode.PRODUCT_ALREADY_EXISTS,
+                    Map.of(
+                            "productName", produit.getProduit(),
+                            "supplier", produit.getFournisseur()
+                    ));
+        }
+
         return produitRepository.save(produit);
     }
 
@@ -37,20 +51,35 @@ public class ProduitServiceImpl implements ProduitService {
         return produitRepository.findByActifTrue();
     }
 
-   @Override
+    @Override
     @Transactional(readOnly = true)
     public Produit recupererProduit(Long id) {
         return produitRepository.findByIdAndActifTrue(id)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Produit actif non trouvé. Soit l'ID est invalide (" + id + "), soit le produit est désactivé"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Produit non trouvé avec ID: " + id,
+                        ErrorCode.PRODUCT_NOT_FOUND));
     }
-
 
     @Override
     @Transactional
     public Produit modifierProduit(Long id, ProduitDTO produitDTO) {
         Produit produit = produitRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Produit non trouvé avec l'ID : " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Produit non trouvé avec ID: " + id,
+                        ErrorCode.PRODUCT_NOT_FOUND));
+
+        if (!produit.isActif()) {
+            throw new BusinessException(
+                    "Impossible de modifier un produit désactivé",
+                    ErrorCode.PRODUCT_INACTIVE);
+        }
+
+        // Validation du prix
+        if (produitDTO.prix() <= 0) {
+            throw new BusinessException(
+                    "Le prix doit être positif",
+                    ErrorCode.INVALID_PRICE);
+        }
 
         // Mise à jour uniquement des champs modifiables
         produit.setProduit(produitDTO.produit());
@@ -64,23 +93,30 @@ public class ProduitServiceImpl implements ProduitService {
         return produitRepository.save(produit);
     }
 
-
     @Override
     @Transactional
     public void desactiverProduit(Long id) {
-        // Désactiver le produit
         Produit produit = produitRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Produit non trouvé"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Produit non trouvé avec ID: " + id,
+                        ErrorCode.PRODUCT_NOT_FOUND));
+
+        if (!produit.isActif()) {
+            log.warn("Tentative de désactivation d'un produit déjà désactivé: {}", id);
+            return;
+        }
+
         produit.setActif(false);
         produitRepository.save(produit);
 
-        // Mettre à zéro le stock associé
-        stockRepository.findByProduitId(id)
-                .ifPresent(stock -> {
-                    stock.setQuantite(0);
-                    stockRepository.save(stock);
-                    log.info("Stock mis à zéro pour le produit ID: {}", id);
-                });
+        stockRepository.findByProduitId(id).ifPresent(stock -> {
+            if (stock.getQuantite() > 0) {
+                log.info("Réinitialisation du stock ({} unités) pour le produit ID: {}",
+                        stock.getQuantite(), id);
+                stock.setQuantite(0);
+                stockRepository.save(stock);
+            }
+        });
     }
 
     // liste des produits en rupture
@@ -97,10 +133,24 @@ public class ProduitServiceImpl implements ProduitService {
     @Override
     @Transactional(readOnly = true)
     public List<ProduitDTO> getProduitsAvecStatutExpiration(int joursAlerte) {
-        List<Produit> produits = produitRepository.findAllWithStock();
-        return produits.stream()
-                .map(p -> ProduitMapper.toDto(p, joursAlerte, utilisateurMapper))
-                .toList();
+        if (joursAlerte < 1) {
+            throw new BusinessException(
+                    "Le seuil d'alerte doit être positif",
+                    ErrorCode.INVALID_ALERT_THRESHOLD);
+        }
+
+        try {
+            List<Produit> produits = produitRepository.findAllWithStock();
+            return produits.stream()
+                    .filter(p -> p.getDateExpiration() != null) // Filtre les produits sans date
+                    .map(p -> ProduitMapper.toDto(p, joursAlerte, utilisateurMapper))
+                    .toList();
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération des produits expirés", e);
+            throw new BusinessException(
+                    "Erreur technique lors du traitement des dates d'expiration",
+                    ErrorCode.EXPIRATION_DATE_PROCESSING_ERROR);
+        }
     }
 
     // Méthode alternative si suppression absolument nécessaire
