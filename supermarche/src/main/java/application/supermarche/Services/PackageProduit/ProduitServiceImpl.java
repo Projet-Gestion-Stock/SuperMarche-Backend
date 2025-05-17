@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -48,7 +49,7 @@ public class ProduitServiceImpl implements ProduitService {
 
     @Override
     public List<Produit> listerProduitsActifs() {
-        return produitRepository.findByActifTrue();
+        return produitRepository.findProduitsActifsEtNonPerimes();
     }
 
     @Override
@@ -128,30 +129,36 @@ public class ProduitServiceImpl implements ProduitService {
     }
 
 
-    // liste des produit expire
-
     @Override
     @Transactional(readOnly = true)
     public List<ProduitDTO> getProduitsAvecStatutExpiration(int joursAlerte) {
         if (joursAlerte < 1) {
             throw new BusinessException(
                     "Le seuil d'alerte doit être positif",
-                    ErrorCode.INVALID_ALERT_THRESHOLD);
+                    ErrorCode.INVALID_ALERT_THRESHOLD
+            );
         }
 
         try {
             List<Produit> produits = produitRepository.findAllWithStock();
+
             return produits.stream()
-                    .filter(p -> p.getDateExpiration() != null) // Filtre les produits sans date
+                    .filter(p -> p.getDateExpiration() != null)
+                    .filter(p -> p.isActif() && p.isPerime())
                     .map(p -> ProduitMapper.toDto(p, joursAlerte, utilisateurMapper))
                     .toList();
+
         } catch (Exception e) {
-            log.error("Erreur lors de la récupération des produits expirés", e);
+            log.error("Erreur lors de la récupération des produits périmés actifs", e);
             throw new BusinessException(
                     "Erreur technique lors du traitement des dates d'expiration",
-                    ErrorCode.EXPIRATION_DATE_PROCESSING_ERROR);
+                    ErrorCode.EXPIRATION_DATE_PROCESSING_ERROR
+            );
         }
     }
+
+
+
 
     // Méthode alternative si suppression absolument nécessaire
     @Transactional

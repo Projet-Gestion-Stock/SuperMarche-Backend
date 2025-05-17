@@ -80,12 +80,22 @@ public class SupermarcheInfoService {
             if (newInfo.getTelephone() != null) {
                 existingInfo.setTelephone(newInfo.getTelephone());
             }
+            if (newInfo.getEmail() != null) {
+                existingInfo.setEmail(newInfo.getEmail());
+            }
+            if (newInfo.getDescription() != null) {
+                existingInfo.setDescription(newInfo.getDescription());
+            }
 
-            log.debug("Informations mises à jour: nom={}, logo={}, localisation={}, telephone={}",
+            log.debug("Informations mises à jour: nom={}, logo={}, localisation={}, telephone={}, email={}, description={}",
                     newInfo.getNom(),
                     newInfo.getLogoUrl(),
                     newInfo.getLocalisation(),
-                    newInfo.getTelephone());
+                    newInfo.getTelephone(),
+                    newInfo.getEmail(),
+                    newInfo.getDescription()
+            );
+
 
             return repository.save(existingInfo);
         } catch (BusinessException e) {

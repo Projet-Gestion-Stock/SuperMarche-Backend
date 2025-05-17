@@ -14,13 +14,17 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 
 @Component
@@ -104,6 +108,12 @@ public class JwtFilter extends OncePerRequestFilter {
         }
 
         UserDetails userDetails = utilisateurService.loadUserByUsername(username);
+
+        // Convertir les rôles au format Spring Security
+        Collection<? extends GrantedAuthority> authorities = userDetails.getAuthorities().stream()
+                .map(a -> new SimpleGrantedAuthority("ROLE_" + a.getAuthority()))
+                .collect(Collectors.toList());
+
         UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                 userDetails,
                 null,

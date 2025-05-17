@@ -41,6 +41,9 @@ public class Utilisateur implements UserDetails {
     @Column(name = "actif", nullable = false)
     private boolean actif = true;
 
+    @Column(name = "supprime", nullable = false)
+    private boolean supprime = false;
+
     @Column(name = "date_creation_utilisateur", updatable = false)
     private LocalDateTime dateCreation = LocalDateTime.now();
 

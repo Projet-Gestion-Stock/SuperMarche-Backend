@@ -12,8 +12,9 @@ import java.util.Optional;
 
 public interface ProduitRepository extends JpaRepository<Produit, Long> {
 
-    @Query("SELECT p FROM Produit p WHERE p.actif = true")
-    List<Produit> findByActifTrue();
+    @Query("SELECT p FROM Produit p WHERE p.actif = true AND p.perime = false")
+    List<Produit> findProduitsActifsEtNonPerimes();
+
 
     @Query("SELECT p FROM Produit p WHERE p.id = ?1 AND p.actif = true")
     Optional<Produit> findByIdAndActifTrue(Long id);
@@ -28,7 +29,7 @@ public interface ProduitRepository extends JpaRepository<Produit, Long> {
 
     // Ajoutez aussi cette méthode pour la tâche planifiée
     @Query("SELECT p FROM Produit p WHERE p.dateExpiration < :date AND p.actif = true")
-    List<Produit> findByDateExpirationBeforeAndActifTrue(@Param("date") LocalDate date);
+    List<Produit> findByDateExpirationBefore(@Param("date") LocalDate date);
 
     boolean existsByProduitAndFournisseur(String produit, String fournisseur);
 

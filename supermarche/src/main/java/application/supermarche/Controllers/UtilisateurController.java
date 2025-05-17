@@ -1,31 +1,34 @@
 package application.supermarche.Controllers;
 
-import application.supermarche.DTO.PackageUtilisateur.AuthenticationDTO;
-import application.supermarche.DTO.PackageUtilisateur.UpdateUtilisateurDTO;
-import application.supermarche.DTO.PackageUtilisateur.UtilisateurDTO;
+import application.supermarche.DTO.PackageUtilisateur.*;
 import application.supermarche.Entites.PackageUtilisateur.Utilisateur;
+import application.supermarche.Enumeration.RoleUtilisateur;
 import application.supermarche.Exceptions.ApiException;
 import application.supermarche.Repository.UtilisateurRepository;
 import application.supermarche.Securite.JwtService;
 import application.supermarche.Services.PackageUtilisateur.ActivationUtilisateurService;
 import application.supermarche.Services.PackageUtilisateur.UtilisateurService;
+import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.web.server.ResponseStatusException;
 
 @CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 @Slf4j
@@ -39,16 +42,18 @@ public class UtilisateurController {
     private final JwtService jwtService;
     private final ActivationUtilisateurService activationService;
     private final UtilisateurRepository utilisateurRepository;
+    private final BCryptPasswordEncoder passwordEncoder;
 
     public UtilisateurController(UtilisateurService utilisateurService,
                                  AuthenticationManager authenticationManager,
                                  JwtService jwtService,
-                                 ActivationUtilisateurService activationService, UtilisateurRepository utilisateurRepository) {
+                                 ActivationUtilisateurService activationService, UtilisateurRepository utilisateurRepository, BCryptPasswordEncoder passwordEncoder) {
         this.utilisateurService = utilisateurService;
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
         this.activationService = activationService;
         this.utilisateurRepository = utilisateurRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     // Connexion
@@ -87,10 +92,33 @@ public class UtilisateurController {
 
     // ajouter personnel
 
-    @PostMapping("gerant/inscription")
+    @PostMapping("/gerant/inscription")
     @ResponseStatus(HttpStatus.CREATED)
-    public UtilisateurDTO createUtilisateur(@RequestBody Utilisateur utilisateur) {
-        return utilisateurService.createUtilisateur(utilisateur);
+    public UtilisateurDTO inscrireUtilisateur(
+            @Valid @RequestBody InscriptionUtilisateurDTO dto) {
+
+        // Validation du rôle
+        try {
+            RoleUtilisateur.valueOf(dto.role());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rôle invalide");
+        }
+
+        Utilisateur utilisateur = new Utilisateur();
+        utilisateur.setNom(dto.nom());
+        utilisateur.setEmail(dto.email());
+        utilisateur.setMotDePasse(passwordEncoder.encode(dto.motDePasse()));
+        utilisateur.setRole(RoleUtilisateur.valueOf(dto.role()));
+        utilisateur.setActif(true);
+
+        Utilisateur saved = utilisateurRepository.save(utilisateur);
+
+        return new UtilisateurDTO(
+                saved.getId(),
+                saved.getNom(),
+                saved.getEmail(),
+                saved.getRole().name()
+        );
     }
 
     // Activer ou desactiver personnel
@@ -117,9 +145,11 @@ public class UtilisateurController {
 
     // liste du personnel
 
-    @GetMapping("gerant/liste")
-    public List<UtilisateurDTO> getAllUtilisateurs() {
-        return utilisateurService.getAllUtilisateurs();
+    @GetMapping("/gerant/liste")
+    public List<UtilisateurAvecEtatDTO> getAllUtilisateurs() {
+        return utilisateurRepository.findBySupprimeFalse().stream()
+                .map(UtilisateurAvecEtatDTO::new)
+                .collect(Collectors.toList());
     }
 
     // Information sur un personnel
@@ -136,6 +166,14 @@ public class UtilisateurController {
             @PathVariable Long id,
             @RequestBody UpdateUtilisateurDTO updateDTO) {
         return utilisateurService.updateUtilisateur(id, updateDTO);
+    }
+
+    // Supprimer un personnel
+
+    @DeleteMapping("gerant/delete/{id}")
+    public ResponseEntity<Void> softDeleteUtilisateur(@PathVariable Long id) {
+        utilisateurService.softDeleteUtilisateur(id);
+        return ResponseEntity.noContent().build();
     }
 
     // deconnexion de l'utilisateur

@@ -23,6 +23,8 @@ public class ActivationUtilisateurService {
     private final UtilisateurRepository utilisateurRepository;
     private final ActivationUtilisateurRepository activationUtilisateurRepository;
 
+    // Activer ou desactiver personnel
+
     @Transactional
     public void changerStatutActivation(Long utilisateurId, Utilisateur modifiePar, boolean nouveauStatut) {
         try {

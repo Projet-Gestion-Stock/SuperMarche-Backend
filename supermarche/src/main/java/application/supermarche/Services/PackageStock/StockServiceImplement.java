@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+
 import org.springframework.dao.DataIntegrityViolationException;
 
 @Slf4j
@@ -27,8 +29,7 @@ public class StockServiceImplement implements StockService {
     private final StockRepository stockRepository;
     private final ProduitRepository produitRepository;
 
-    public StockServiceImplement(StockRepository stockRepository,
-                                 ProduitRepository produitRepository) {
+    public StockServiceImplement(StockRepository stockRepository,ProduitRepository produitRepository) {
         this.stockRepository = stockRepository;
         this.produitRepository = produitRepository;
     }
@@ -132,38 +133,62 @@ public class StockServiceImplement implements StockService {
     @Override
     public List<Stock> listerStocksFaibles() {
         try {
-            List<Stock> stocks = stockRepository.findByQuantiteLessThanEqual(SEUIL_ALERTE_DEFAUT);
-            log.info("Récupération de {} stocks faibles", stocks.size());
+            List<Stock> stocks = stockRepository.findStockFaibleStrict(SEUIL_ALERTE_DEFAUT);
+            log.info("Récupération de {} stocks faibles (hors rupture)", stocks.size());
+
+            if (!stocks.isEmpty()) {
+                String produits = stocks.stream()
+                        .map(stock -> stock.getProduit().getProduit())
+                        .collect(Collectors.joining(", "));
+                log.info("📉 Produits avec stock faible (mais pas en rupture) : {}", produits);
+            }
+
             return stocks;
+
         } catch (Exception e) {
             log.error("Erreur lors de la récupération des stocks faibles: {}", e.getMessage());
             throw new BusinessException("Erreur technique", ErrorCode.DATABASE_ERROR);
         }
     }
 
+
+
     @Override
     public List<Stock> listerStocksEnRupture() {
         try {
             List<Stock> stocks = stockRepository.findByQuantiteLessThanEqualAndProduitActifTrue(0);
             log.info("Récupération de {} stocks en rupture", stocks.size());
+
+            if (!stocks.isEmpty()) {
+                String produits = stocks.stream()
+                        .map(s -> s.getProduit().getProduit())
+                        .collect(Collectors.joining(", "));
+                log.info("❌ Produits en rupture : {}", produits);
+            }
+
             return stocks;
+
         } catch (Exception e) {
             log.error("Erreur lors de la récupération des stocks en rupture: {}", e.getMessage());
             throw new BusinessException("Erreur technique", ErrorCode.DATABASE_ERROR);
         }
     }
 
+
     @Override
     public Map<String, Object> statistiquesStock() {
         try {
-            List<Stock> stocks = stockRepository.findAll();
+            List<Stock> stocks = stockRepository.findAllStocksProduitsActifs();
+            List<Stock> faibles = stockRepository.findStockFaibleStrictActif(SEUIL_ALERTE_DEFAUT);
+            List<Stock> ruptures = stockRepository.findStockEnRuptureActif();
+
             Map<String, Object> stats = new HashMap<>();
             stats.put("totalProduitsEnStock", stocks.size());
-            stats.put("stocksFaibles", listerStocksFaibles().size());
-            stats.put("stocksEnRupture", listerStocksEnRupture().size());
+            stats.put("stocksFaibles", faibles.size());
+            stats.put("stocksEnRupture", ruptures.size());
             stats.put("quantiteTotale", stocks.stream().mapToInt(Stock::getQuantite).sum());
 
-            log.info("Génération des statistiques de stock");
+            log.info("Génération des statistiques de stock (produits actifs uniquement)");
             return stats;
 
         } catch (Exception e) {
@@ -171,4 +196,5 @@ public class StockServiceImplement implements StockService {
             throw new BusinessException("Erreur technique", ErrorCode.DATABASE_ERROR);
         }
     }
+
 }

@@ -75,6 +75,8 @@ public class ProduitController {
         }
     }
 
+    // Lister les produits
+
     @GetMapping(path = "staff/listerProduits", produces = APPLICATION_JSON_VALUE)
     public ResponseEntity<List<ProduitDTO>> listerProduitsActifs() {
         try {

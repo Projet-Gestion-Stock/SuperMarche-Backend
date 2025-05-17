@@ -1,5 +1,6 @@
 package application.supermarche.Services.PackageUtilisateur;
 
+import application.supermarche.DTO.PackageUtilisateur.InscriptionUtilisateurDTO;
 import application.supermarche.DTO.PackageUtilisateur.UpdateUtilisateurDTO;
 import application.supermarche.DTO.PackageUtilisateur.UtilisateurDTO;
 import application.supermarche.Entites.PackageUtilisateur.Utilisateur;
@@ -58,6 +59,12 @@ public class UtilisateurService implements UserDetailsService {
                 throw new DisabledException("Compte désactivé");
             }
 
+            // Vérification que le compte n'est pas supprimé (soft delete)
+            if (utilisateur.isSupprime()) {
+                log.warn("Tentative de connexion compte supprimé: {}", username);
+                throw new DisabledException("Compte supprimé");
+            }
+
             return utilisateur;
         } catch (Exception e) {
             log.error("Erreur technique loadUserByUsername: {}", e.getMessage());
@@ -65,28 +72,19 @@ public class UtilisateurService implements UserDetailsService {
         }
     }
 
-    @Transactional
-    public UtilisateurDTO createUtilisateur(Utilisateur utilisateur) {
-        try {
-            log.info("Création utilisateur: {}", utilisateur.getEmail());
+    // Ajouter personnel
 
-            if (utilisateurRepository.existsByEmail(utilisateur.getEmail())) {
-                throw new BusinessException("Email déjà utilisé", ErrorCode.EMAIL_ALREADY_USED);
-            }
-
-            utilisateur.setMotDePasse(passwordEncoder.encode(utilisateur.getMotDePasse()));
-            utilisateur.setActif(true);
-
-            Utilisateur savedUser = utilisateurRepository.save(utilisateur);
-            log.info("Utilisateur créé ID: {}", savedUser.getId());
-
-            return utilisateurMapper.toDTO(savedUser);
-
-        } catch (DataIntegrityViolationException e) {
-            log.error("Erreur base de données: {}", e.getMessage());
-            throw new BusinessException("Erreur de création utilisateur", ErrorCode.DATABASE_ERROR);
-        }
+    public Utilisateur createUtilisateur(InscriptionUtilisateurDTO dto) {
+        Utilisateur user = new Utilisateur();
+        user.setNom(dto.nom());
+        user.setEmail(dto.email());
+        user.setRole(RoleUtilisateur.valueOf(dto.role()));
+        user.setMotDePasse(passwordEncoder.encode(dto.motDePasse()));
+        user.setActif(true); // Par défaut actif à la création
+        return utilisateurRepository.save(user);
     }
+
+    // Information sur un personnel
 
     public UtilisateurDTO getUtilisateurById(Long id) {
         return utilisateurRepository.findById(id)
@@ -96,6 +94,8 @@ public class UtilisateurService implements UserDetailsService {
                     return new ResourceNotFoundException("Utilisateur introuvable", ErrorCode.USER_NOT_FOUND);
                 });
     }
+
+    // Modifier info de un personnel
 
     @Transactional
     public UtilisateurDTO updateUtilisateur(Long id, UpdateUtilisateurDTO updateDTO) {
@@ -131,10 +131,26 @@ public class UtilisateurService implements UserDetailsService {
         }
     }
 
+    // liste du personnel
+
     public List<UtilisateurDTO> getAllUtilisateurs() {
-        return utilisateurRepository.findAll().stream()
+        return utilisateurRepository.findBySupprimeFalse().stream()
                 .map(utilisateurMapper::toDTO)
                 .collect(Collectors.toList());
+    }
+
+    // Marquer utilisateur comme supprimé
+
+    public void softDeleteUtilisateur(Long id) {
+        Utilisateur utilisateur = utilisateurRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Utilisateur non trouvé avec l'id : " + id));
+
+        if (utilisateur.isSupprime()) {
+            throw new IllegalStateException("L'utilisateur est déjà supprimé");
+        }
+
+        utilisateur.setSupprime(true);
+        utilisateurRepository.save(utilisateur);
     }
 
     public Utilisateur findByEmail(String email) {

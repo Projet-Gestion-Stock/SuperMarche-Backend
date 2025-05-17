@@ -46,8 +46,9 @@ public class ProduitMapper {
                 produit.getUnite(),
                 produit.getFournisseur(),
                 produit.getDescription(),
-                getStatutExpiration(produit, joursAlerte), // Méthode extraite pour plus de clarté
-                utilisateurMapper.toDTO(produit.getUtilisateur())
+                getStatutExpiration(produit, joursAlerte),
+                produit.getImageUrl(),
+                utilisateurMapper.toDTO(produit.getUtilisateur()) // Méthode extraite pour plus de clarté
         );
     }
 

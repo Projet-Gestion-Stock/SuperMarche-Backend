@@ -50,6 +50,9 @@ public class Produit {
     @Column(name = "image_url", length = 500)
     private String imageUrl;
 
+    @Column(nullable = false)
+    private boolean perime = false;
+
     // Méthode de désactivation
 
     public void desactiver() {

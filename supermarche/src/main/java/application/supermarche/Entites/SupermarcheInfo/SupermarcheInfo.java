@@ -30,6 +30,10 @@ public class SupermarcheInfo {
 
     private String telephone;
 
+    private String description;
+
+    private String email;
+
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "supermarche_horaires",

@@ -28,7 +28,7 @@ public class StatistiquesController {
         this.statistiquesService = statistiquesService;
     }
 
-    @GetMapping(path = "admin/ventes", produces = MediaType.APPLICATION_JSON_VALUE)
+    @GetMapping(path = "gerant/ventes", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> statistiquesVentes() {
         try {
             log.info("Demande des statistiques de ventes");

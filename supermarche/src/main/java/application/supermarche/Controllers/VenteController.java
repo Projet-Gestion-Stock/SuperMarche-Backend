@@ -63,6 +63,8 @@ public class VenteController {
         }
     }
 
+    // liste des ventes
+
     @GetMapping(path = "staff/listerVentes", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<List<VenteResponseDTO>> listerVentes() {
         try {
@@ -75,6 +77,8 @@ public class VenteController {
             throw new ApiException("Erreur lors de la récupération des ventes", HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+
+    // Information sur une vente spécifique
 
     @GetMapping(path = "staff/recupererVente/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<VenteResponseDTO> recupererVente(@PathVariable Long id) {
@@ -92,6 +96,8 @@ public class VenteController {
         }
     }
 
+    // generer le recu d'une vente
+
     @GetMapping(path = "staff/genererRecu/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> genererRecu(@PathVariable Long id) {
         try {
@@ -107,6 +113,8 @@ public class VenteController {
             throw new ApiException("Erreur lors de la génération du reçu", HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+
+    // generer le recu d'une vente version pdf
 
     @GetMapping(path = "staff/genererRecuPDF/{id}", produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<?> genererRecuPDF(@PathVariable Long id) {

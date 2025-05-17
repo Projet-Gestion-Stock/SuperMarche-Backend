@@ -14,7 +14,6 @@ import application.supermarche.Entites.SupermarcheInfo.SupermarcheInfo;
 import application.supermarche.Enumeration.ErrorCode;
 import application.supermarche.Exceptions.BusinessException;
 import application.supermarche.Exceptions.ResourceNotFoundException;
-import application.supermarche.Exceptions.UtilisateurException.RessourceNotFoundException;
 import application.supermarche.Mapper.VenteMapper;
 import application.supermarche.Repository.ProduitRepository;
 import application.supermarche.Repository.StockRepository;
@@ -25,6 +24,7 @@ import application.supermarche.Services.SupermarcheInfo.SupermarcheInfoService;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.pdmodel.font.*;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -96,10 +96,16 @@ public class VenteServiceImplement implements VenteService {
 
         for (ProduitVenduDTO p : venteRequest.produits()) {
             Produit produit = produitRepository.findById(p.produitId())
-                    .orElseThrow(() -> new RessourceNotFoundException("Produit introuvable avec ID : " + p.produitId()));
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Produit introuvable avec ID : " + p.produitId(),
+                            ErrorCode.PRODUCT_NOT_FOUND
+                    ));
 
             Stock stock = stockRepository.findByProduitId(p.produitId())
-                    .orElseThrow(() -> new RessourceNotFoundException("Stock introuvable pour le produit ID : " + p.produitId()));
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Stock introuvable pour le produit ID : " + p.produitId(),
+                            ErrorCode.STOCK_NOT_FOUND
+                    ));
 
             if (stock.getQuantite() < p.quantite()) {
                 throw new BusinessException(
@@ -143,8 +149,10 @@ public class VenteServiceImplement implements VenteService {
 
             // Version corrigée avec gestion d'Optional
             Stock stock = stockRepository.findByProduitId(vp.getProduit().getId())
-                    .orElseThrow(() -> new RessourceNotFoundException(
-                            "Stock introuvable pour le produit ID: " + vp.getProduit().getId()));
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Stock introuvable pour le produit ID: " + vp.getProduit().getId(),
+                            ErrorCode.STOCK_NOT_FOUND
+                    ));
 
             int nouvelleQuantite = stock.getQuantite() - vp.getQuantiteVendue();
             if (nouvelleQuantite < 0) {
@@ -159,19 +167,25 @@ public class VenteServiceImplement implements VenteService {
        // return venteSauvegardee;
         log.info("Vente enregistrée avec succès. ID: {}", venteSauvegardee.getId());
         return venteRepository.findById(venteSauvegardee.getId())
-                .orElseThrow(() -> new RessourceNotFoundException("Vente non trouvée après création"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vente non trouvée après création",
+                        ErrorCode.SALE_NOT_FOUND
+                ));
     }
+
+    // lister les ventes effectuée
 
     @Override
     public List<VenteResponseDTO> listerVentes() {
-        return venteRepository.findAll().stream()
+        return venteRepository.findAll(Sort.by(Sort.Direction.DESC, "dateVente")) // Tri par date décroissante
+                .stream()
                 .map(vente -> {
                     List<VenteProduitResponseDTO> produits = Optional.ofNullable(vente.getVenteProduits())
                             .orElse(Collections.emptyList())
                             .stream()
                             .map(vp -> new VenteProduitResponseDTO(
                                     vp.getProduit().getId(),
-                                    vp.getProduit().getProduit(), // Assurez-vous que c'est le bon champ
+                                    vp.getProduit().getProduit(),
                                     vp.getQuantiteVendue(),
                                     vp.getPrixUnitaire()
                             ))
@@ -197,10 +211,15 @@ public class VenteServiceImplement implements VenteService {
                 .toList();
     }
 
+    // Information sur une vente spécifique
+
     @Override
     public VenteResponseDTO recupererVente(Long id) {
         Vente vente = venteRepository.findById(id)
-                .orElseThrow(() -> new RessourceNotFoundException("Vente avec l'ID " + id + " non trouvée"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Vente avec l'ID " + id + " non trouvée",
+                        ErrorCode.SALE_NOT_FOUND
+                ));
 
         List<VenteProduitResponseDTO> produits = Optional.ofNullable(vente.getVenteProduits())
                 .orElse(Collections.emptyList())
@@ -247,6 +266,8 @@ public class VenteServiceImplement implements VenteService {
         } while (venteRepository.existsByNumeroRecu(numero)); // Vérifie en base
         return numero;
     }
+
+    // generer le recu d'une vente
 
     @Override
     public String genererRecu(Long id) {
@@ -301,7 +322,7 @@ public class VenteServiceImplement implements VenteService {
         return recu.toString();
     }
 
-    // methode generation de  recu pdf
+    // methode generation de  recu pdf pour impression
 
     public byte[] genererRecuPDF(Long id) throws IOException {
         if (id == null) throw new IllegalArgumentException("L'ID de vente ne peut pas être null");

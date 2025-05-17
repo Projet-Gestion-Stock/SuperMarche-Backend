@@ -96,7 +96,7 @@ public class SupermarcheInfoController {
         }
     }
 
-    @GetMapping("admin/recupererInfo")
+    @GetMapping("staff/recupererInfo")
     public ResponseEntity<SupermarcheInfo> getInfo() {
         try {
             log.debug("Récupération des informations du supermarché");

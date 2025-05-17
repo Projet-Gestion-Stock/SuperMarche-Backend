@@ -20,6 +20,7 @@ public record ProduitDTO(
         String fournisseur,
         String description,
         String statutExpiration,
+        String imageUrl,
         UtilisateurDTO utilisateur  // Ajouté pour les infos basiques de l'utilisateur
 ) {
     public ProduitDTO {
